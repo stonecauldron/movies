@@ -1,0 +1,8 @@
+<h1>Query</h1>
+<% include partials/query_textarea.ejs %>
+<% if(data.length > 0) { %> 
+    <h2>Result</h2>
+    <%include partials/array.ejs %>
+<% } else if(error) { %>
+<div class="alert alert-danger" id="queryError" role="alert"><%= error.code + " (" + error.errno + ")" %> </div>
+<% } %>

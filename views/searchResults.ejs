@@ -1,0 +1,7 @@
+<h1>Search Results for "<%= query %>"</h1>
+<% _.each(results, function(res, tableName) { %>
+	<hr/>
+	<h2><%= tableName %></h2>
+	<% var data = res %>
+	<% include partials/array.ejs %>
+<% }); %>

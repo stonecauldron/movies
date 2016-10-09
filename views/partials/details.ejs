@@ -1,0 +1,8 @@
+<table class="table table-striped table-hover table-bordered">
+	<% _.each(attributes, function(value, key) { %>
+		<tr>
+			<th><%= key %></th>
+			<td width="100%"><%= value %></td>
+		</tr>
+	<% }) %>
+</table>

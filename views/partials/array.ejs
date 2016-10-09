@@ -1,0 +1,20 @@
+<% var headers = [];
+if(data.length > 0) headers = Object.keys(data[0]); %>
+<table class="table table-striped table-hover table-bordered enable-fks">
+    <thead>
+        <tr>
+            <% for(var i in headers) { %>
+            <th><%= headers[i] %></th>
+            <% } %>
+        </tr>
+    </thead>
+    <tbody>
+        <% for (var i in data) { %>
+            <tr>
+                <% for(var j in data[i]) { %>
+                    <td><%= data[i][j] %></td>
+                <% } %>
+            </tr>
+        <% } %>
+    </tbody>
+</table>

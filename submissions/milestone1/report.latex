@@ -1,0 +1,124 @@
+\documentclass{report}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage{rotating}
+\title{Database Project - Deliverable 3}
+\author{Guillaume Leclerc, Pedro Amorim, Matvey Khokhlov}
+\date{May 2015}
+\begin{document}
+	\maketitle
+	\chapter{Design Document}
+		\par We decided to put the relation in file PRODUCTION\_CAST.csv into one single relationship that links the Production, the Person and the Character if there is one.
+		\par We decided to remove the actress role as this information is already present in Person.gender.
+		This type of diagram is not expressive enough to specify the participation and key constraints for ternary relationships, so we have to say it here.
+		\begin{itemize}
+			\item Persona has a total participation with Production and Person
+			\item Person has a total participation with Production because every person is either an actor or plays another role in the production.
+			\item Production has a partial participation with the two others entity sets because some of them do not have actors or characters (eg. "Baraka")
+			\item Production $\rightarrow$ Person is a one-to-many relationship
+			\item Production $\rightarrow$ Persona is a one-to-many relationship
+			\item Production $\rightarrow$ Persona is a one-to-many relationship
+		\end{itemize}
+
+		\par We decided to represent Episode and TV Series as subclasses of the Production entity. This allows us to have attributes specific to the subclasses while retaining the common attributes of a Production. An episode cannot be a TV Serie thus this is a Non-overlapping ISA relation but there is no covering constraint because a Production might neither be an Episode nor a TV Serie. 
+	\chapter{ER Diagram}
+		See next page (full diagram)
+		\newpage
+        \begin{sidewaysfigure}[ht]
+        \includegraphics[width=20cm]{databases.png}
+    \end{sidewaysfigure}
+	\chapter{DDL SQL code}
+		\lstinputlisting[language=sql]{schema.sql}
+	\chapter{SQL Queries for Milestone 2}
+		\lstinputlisting[language=sql]{milestone2Queries.sql}
+    \chapter{Basic interface for Milestone 2}
+        \par We parsed the database and implemented a basic interface to run the simple search queries for milestone 2. We have done this using the Sails.js framework. Screenshots on the pages that follow.
+        \newpage
+        \par Homepage:
+        \par \includegraphics[width=13cm]{homepage.png}
+        \newpage
+        \par Search interface: 
+        \par \includegraphics[width=13cm]{page2.png}
+        \par Running a query:
+        \par \includegraphics[width=13cm]{search2.png}
+\chapter{SQL Queries for Milestone 2}
+\lstinputlisting[language=sql]{milestone3Queries.sql}
+\chapter{Analysis of Queries}
+\section{Query f)}
+\subsection{Query Description}
+Find actors, actresses and directors who have movies released after their
+death
+\subsection{Query Code}
+\begin{lstlisting}[language=sql]
+SELECT DISTINCT first_name, last_name 
+FROM "Production" NATURAL JOIN"PersonParticipatesProduction"
+NATURAL JOIN "Person" 
+WHERE death_date IS NOT NULL 
+AND EXTRACT(YEAR FROM death_date) < year 
+AND role IN ('direc\tor', 'actor','actress')
+AND kind IN ('tv movie', 'movie', 'video movie');
+\end{lstlisting}
+\subsection{Analysis}
+\subsubsection{Query Plan without Index}
+\tiny
+\begin{lstlisting}
+HashAggregate  (cost=1612225.26..1612266.07 rows=4081 width=230)
+  ->  Nested Loop  (cost=227014.93..1612103.20 rows=24411 width=230)
+    Join Filter: ("Person".death_date) < ("Production".year)::double precision)
+    ->  Hash Join  (cost=227014.50..1504355.88 rows=217825 width=238)
+          Hash Cond: ("PersonParticipatesProduction".pid = "Person".pid)
+          ->  Seq Scan on "PersonParticipatesProduction"  (cost=0.00..886189.22 rows=25931594 width=8)
+                Filter: (role = ANY ('{director,actor,actress}'::personparticipatesproduction_role[]))
+          ->  Hash  (cost=226504.44..226504.44 rows=40805 width=238)
+                ->  Seq Scan on "Person"  (cost=0.00..226504.44 rows=40805 width=238)
+                      Filter: (death_date IS NOT NULL)
+    ->  Index Scan using "Production_pkey" on "Production"  (cost=0.43..0.47 rows=1 width=8)
+          Index Cond: (prodid = "PersonParticipatesProduction".prodid)
+          Filter: (kind = ANY ('{"tv movie",movie,"video movie"}'::production_kind[]))
+
+Time: 17195,901 ms
+\end{lstlisting}
+\normalsize
+The biggest cost in the query execution comes from the nested loop joining the
+PersonParticipatesProduction and Person table with the Production table. We can
+see that the optimizer of the database management system correctly inferred that
+the condition about the death date should apply during the join and not as a
+filter after the full table join. Given that the Production table is joined with
+the help of the primary key the nested loop only needs to be run once and thus
+there should be no way of optimizing it.
+
+Sequential scans are often places where indexes can offer performance gains and
+we can see that the database management system decided to do a sequential scan
+on PersonParticipatesProduction to find all the tuples with a director, actress
+and actor role. This indicates that an index on the role column could be a good
+candidate on optimizing this query. There is another sequential scan on the
+death date column so an index could potentially speed up the whole query.
+
+Here is the query plan with an index on role from PersonParticipatesProduction
+and an index on the death date of the person relation.
+\subsubsection{Query Plan with Indexes}
+\tiny
+\begin{lstlisting}
+HashAggregate  (cost=1279454.20..1279497.44 rows=4324 width=230)
+   ->  Nested Loop  (cost=102159.51..1279326.65 rows=25511 width=230)
+     Join Filter: ("Person".death_date) < ("Production".year)::double precision)
+     ->  Hash Join  (cost=102159.08..1165643.26 rows=229783 width=238)
+           Hash Cond: ("PersonParticipatesProduction".pid = "Person".pid)
+           ->  Index Scan using "PersonParticipatesProduction_role_idx" on "PersonParticipatesProduction"  (cost=0.57..835274.84 rows=25818523 width=8)
+                 Index Cond: (role = ANY ('{director,actor,actress}'::personparticipatesproduction_role[]))
+           ->  Hash  (cost=101618.05..101618.05 rows=43237 width=238)
+                 ->  Bitmap Heap Scan on "Person"  (cost=811.52..101618.05 rows=43237 width=238)
+                       Recheck Cond: (death_date IS NOT NULL)
+                       ->  Bitmap Index Scan on "Person_death_date_idx"  (cost=0.00..800.71 rows=43237 width=0)
+                             Index Cond: (death_date IS NOT NULL)
+     ->  Index Scan using "Production_pkey" on "Production"  (cost=0.43..0.47 rows=1 width=8)
+           Index Cond: (prodid = "PersonParticipatesProduction".prodid)
+           Filter: (kind = ANY ('{"tv movie",movie,"video movie"}'::production_kind[]))
+
+Time: 15541,305 ms
+\end{lstlisting}
+\normalsize
+As we can see the execution time was improved by about 1600 ms indicating and
+the indexes are effectively being used indicating that they were effective in
+improving the execution time of the query.
+\end{document}
